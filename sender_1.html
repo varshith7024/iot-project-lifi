@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LiFi Transmitter - Node A</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f4f8; padding: 20px; text-align: center; }
+        .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; width: 400px; }
+        input { width: 80%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        #status { color: #666; font-size: 0.9em; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>LiFi Transmitter (Node A)</h2>
+        <button id="connect">1. Connect to ESP32</button>
+        <div id="status">Status: Disconnected</div>
+        <hr>
+        <input type="text" id="message" placeholder="Type message here..." disabled>
+        <button id="send" disabled>2. Send via LiFi</button>
+    </div>
+
+    <script>
+        let port, writer;
+        const btnConnect = document.getElementById('connect');
+        const btnSend = document.getElementById('send');
+        const inputMsg = document.getElementById('message');
+        const status = document.getElementById('status');
+
+        btnConnect.addEventListener('click', async () => {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                writer = port.writable.getWriter();
+                
+                status.innerText = "Status: Connected to Node A";
+                inputMsg.disabled = false;
+                btnSend.disabled = false;
+                btnConnect.style.background = "#28a745";
+            } catch (e) { status.innerText = "Error: " + e; }
+        });
+
+        btnSend.addEventListener('click', async () => {
+            const data = inputMsg.value + "\n";
+            const encoder = new TextEncoder();
+            await writer.write(encoder.encode(data));
+            inputMsg.value = "";
+        });
+    </script>
+</body>
+</html>
