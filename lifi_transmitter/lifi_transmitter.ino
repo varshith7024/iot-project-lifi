@@ -74,114 +74,6 @@ int getLogicLevel(int raw) {
   return -1;
 }
 
-// ==============================================================================
-// 2. ADD THIS MQTT RECONNECT HELPER BEFORE setup()
-// ==============================================================================
-void reconnectMQTT() {
-  // Loop until we're reconnected (the task will handle the delay)
-  if (!client.connected()) {
-    String clientId = "ESP32-NodeB";
-    Serial.printf("[MQTT] Attempting connection as %s...\n", clientId.c_str());
-
-    if (client.connect(clientId.c_str())) {
-      Serial.println("[MQTT] Connected!");
-    } else {
-      int state = client.state();
-      Serial.print("[MQTT] Connection failed, rc=");
-      Serial.print(state);
-      
-      // Detailed Error Decoding
-      switch (state) {
-        case -4: Serial.println(" (Connection Timeout - Server not found)"); break;
-        case -3: Serial.println(" (Connection Lost)"); break;
-        case -2: Serial.println(" (Connect Failed - Network issue)"); break;
-        case -1: Serial.println(" (Disconnected)"); break;
-        case 1:  Serial.println(" (Bad Protocol Version)"); break;
-        case 2:  Serial.println(" (Identifier Rejected - Bad Client ID)"); break;
-        case 3:  Serial.println(" (Server Unavailable)"); break;
-        case 4:  Serial.println(" (Bad Credentials - Check User/Pass)"); break;
-        case 5:  Serial.println(" (Not Authorized)"); break;
-        default: Serial.println(" (Unknown Error)"); break;
-      }
-      Serial.println("[MQTT] Retrying next cycle...");
-    }
-  }
-}
-
-// ==============================================================================
-// 3. THE FreeRTOS MQTT TASK (Runs on Core 0)
-// ==============================================================================
-void mqttReportingTask(void *pvParameters) {
-  // 1. Connect to WiFi
-  Serial.print("\n[WIFI] Connecting to ");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
-  
-  while (WiFi.status() != WL_CONNECTED) {
-    vTaskDelay(pdMS_TO_TICKS(500));
-    Serial.print(".");
-  }
-  Serial.println("\n[WIFI] Connected! IP: " + WiFi.localIP().toString());
-
-  // 2. Setup MQTT
-  client.setServer(mqtt_server, mqtt_port);
-
-  // 3. Main Reporting Loop
-  for (;;) {
-    if (!client.connected()) {
-      reconnectMQTT();
-    }
-    
-    // Process incoming MQTT packets and keep connection alive
-    client.loop(); 
-
-    // Only publish if the LiFi logic is currently IDLE to prevent CPU jitter
-    if (client.connected() && txMState == TX_M_IDLE && rxState == WAIT_IDLE) {
-      
-      StaticJsonDocument<512> doc; // Increased size for extra metrics
-      doc["node"] = "Node_A";
-      
-      // Optical Metrics
-      JsonObject optical = doc.createNestedObject("optical");
-      optical["adc_raw"] = analogRead(RX_PIN);
-      optical["min"] = adcMin;
-      optical["max"] = adcMax;
-      optical["thr"] = threshold;
-      optical["hys"] = hysteresis;
-      optical["swing"] = adcMax - adcMin;
-
-      // Traffic Metrics
-      JsonObject traffic = doc.createNestedObject("traffic");
-      traffic["tx_msgs"] = totalMessagesTx;
-      traffic["rx_msgs"] = totalMessagesRx;
-      // If you have byte counters, add them here
-      
-      // System Health Metrics (Great for Dashboards)
-      JsonObject system = doc.createNestedObject("system");
-      system["rssi"] = WiFi.RSSI();
-      system["heap"] = ESP.getFreeHeap();
-      system["uptime"] = millis() / 1000;
-
-      // Serialize and Publish
-            // Serialize and Publish
-      char jsonBuffer[512];
-      size_t n = serializeJson(doc, jsonBuffer);
-      
-      Serial.print("[MQTT] Payload size: ");
-      Serial.println(n);
-
-      if (client.publish("iot_lifi/telemetry/nodeA", jsonBuffer)) {
-        Serial.println("[MQTT] Publish Successful!");
-      } else {
-        Serial.println("[MQTT] Publish FAILED! Check buffer size or connection.");
-      }
-    }
-
-    // High Delay (2s) ensures this task doesn't starve the LiFi bit-banging
-    vTaskDelay(pdMS_TO_TICKS(2000)); 
-  }
-}
-
 void thingSpeakTask(void *pvParameters) {
   for (;;) {
     // Only attempt if WiFi is up and LiFi is not busy
@@ -205,7 +97,7 @@ void thingSpeakTask(void *pvParameters) {
       int httpResponseCode = http.GET();
       
       if (httpResponseCode > 0) {
-        Serial.printf("[ThingSpeak] Update Successful. Code: %d\n", httpResponseCode);
+        //Serial.printf("[ThingSpeak] Update Successful. Code: %d\n", httpResponseCode);
       } else {
         Serial.printf("[ThingSpeak] Update Failed. Error: %s\n", http.errorToString(httpResponseCode).c_str());
       }

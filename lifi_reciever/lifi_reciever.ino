@@ -63,39 +63,6 @@ int getLogicLevel(int raw) {
   return -1;
 }
 
-// ==============================================================================
-// 2. ADD THIS MQTT RECONNECT HELPER BEFORE setup()
-// ==============================================================================
-void reconnectMQTT() {
-  // Loop until we're reconnected (the task will handle the delay)
-  if (!client.connected()) {
-    String clientId = "ESP32-NodeC";
-    Serial.printf("[MQTT] Attempting connection as %s...\n", clientId.c_str());
-
-    if (client.connect(clientId.c_str())) {
-      Serial.println("[MQTT] Connected!");
-    } else {
-      int state = client.state();
-      Serial.print("[MQTT] Connection failed, rc=");
-      Serial.print(state);
-      
-      // Detailed Error Decoding
-      switch (state) {
-        case -4: Serial.println(" (Connection Timeout - Server not found)"); break;
-        case -3: Serial.println(" (Connection Lost)"); break;
-        case -2: Serial.println(" (Connect Failed - Network issue)"); break;
-        case -1: Serial.println(" (Disconnected)"); break;
-        case 1:  Serial.println(" (Bad Protocol Version)"); break;
-        case 2:  Serial.println(" (Identifier Rejected - Bad Client ID)"); break;
-        case 3:  Serial.println(" (Server Unavailable)"); break;
-        case 4:  Serial.println(" (Bad Credentials - Check User/Pass)"); break;
-        case 5:  Serial.println(" (Not Authorized)"); break;
-        default: Serial.println(" (Unknown Error)"); break;
-      }
-      Serial.println("[MQTT] Retrying next cycle...");
-    }
-  }
-}
 
 // ==============================================================================
 // 3. THE FreeRTOS MQTT TASK (Runs on Core 0)
@@ -173,8 +140,8 @@ int raw = analogRead(RX_PIN);
   int level2 = getLogicLevel(raw); // Get the level first
   static uint32_t lastDebug = 0;
   if (millis() - lastDebug > 2000) {
-    Serial.printf("[DEBUG] Raw: %d | Thr: %d | Hys: %d | Level: %d | State: %d\n", 
-                  raw, threshold, hysteresis, level2, rxState);
+    //Serial.printf("[DEBUG] Raw: %d | Thr: %d | Hys: %d | Level: %d | State: %d\n", 
+                  //raw, threshold, hysteresis, level2, rxState);
     lastDebug = millis();
   }
 
@@ -193,13 +160,24 @@ int raw = analogRead(RX_PIN);
       } break;
     case RECV_STOP: if (millis() >= rxNextTime) {
         if (rxByte != 0xAA && rxByte != 0x55) {
-          if (rxByte == '\n') { rxBuf[rxLen] = '\0'; sendTelemetry(rxLen, millis()-rxMessageStartMs); rxLen = 0; totalMessagesRx++;}
+          if (rxByte == '\n') { 
+            rxBuf[rxLen] = '\0'; // Null-terminate the string
+            
+            // --- ADD THIS LINE TO PRINT TO SERIAL ---
+            Serial.printf("\n[RECV] Final Message: \"%s\" (%d bytes)\n", rxBuf, rxLen);
+            // -----------------------------------------
+
+            sendTelemetry(rxLen, millis() - rxMessageStartMs); 
+            rxLen = 0; 
+            totalMessagesRx++;
+          }
           else if (rxByte >= 0x20 && rxByte <= 0x7E) {
             if (rxLen == 0) rxMessageStartMs = millis();
-            if (rxLen < sizeof(rxBuf)-1) rxBuf[rxLen++] = (char)rxByte;
+            if (rxLen < sizeof(rxBuf) - 1) rxBuf[rxLen++] = (char)rxByte;
           }
         }
-        calibFrozen = false; rxState = WAIT_IDLE;
+        calibFrozen = false; 
+        rxState = WAIT_IDLE;
       } break;
   }
 }
